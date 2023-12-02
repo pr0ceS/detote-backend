@@ -29,6 +29,32 @@ router.put("/:id", isAdmin, async (req, res) => {
   }
 });
 
+router.put('/registered/:id', isUser, async (req, res) => {
+  try {
+    // Find the corresponding Order by ID and update the userId
+    const updatedOrder = await Order.findByIdAndUpdate(
+      req.params.id,
+      {
+        $set: { userId: req.body.userId }, // Update the userId field
+      },
+      { new: true }
+    );
+
+    // Additional logic for sending emails based on delivery status
+    if (req.body.delivery_status === "dispatched") {
+      // Send tracking code along with it
+      sendOrderShipped(req.body.shipping?.email, "Your order is on its way!", req.body);
+    } else if (req.body.delivery_status === "delivered") {
+      sendOrderDelivered(req.body.shipping?.email, "Your order has been delivered!", req.body);
+    }
+
+    res.json(updatedOrder);
+  } catch (err) {
+    res.status(500).json(err);
+  }
+});
+
+
 //DELETE
 router.delete("/:id", isAdmin, async (req, res) => {
   try {
@@ -49,13 +75,16 @@ router.get("/find/:id", isUser, async (req, res) => {
   }
 });
 
-// Get user's orders by fingerprint
-router.get("/find/:fingerprint", isAdmin, async (req, res) => {
+// Get latest order by fingerprint
+router.get("/find/order/:fingerprint", async (req, res) => {
   try {
-    const orders = await Order.find({ fingerprint: req.params.fingerprint });
-    res.json(orders);
+    const orders = await Order.find({ fingerprint: req.params.fingerprint })
+      .sort({ createdAt: -1 }) // Sort by createdAt in descending order
+      .limit(1); // Limit the results to one order
+
+    res.status(200).send({order: orders, success: false});
   } catch (err) {
-    res.status(500).json(err);
+    res.json({message: err, success: false});
   }
 });
 

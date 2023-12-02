@@ -8,7 +8,7 @@ const router = require("express").Router();
 router.post('/', async (req, res) => {
 	const { fingerprint } = req.body;
 	const schema = Joi.object({
-    fingerprint: Joi.string().max(300).required(),
+    fingerprint: Joi.number().required(),
   });
 
 	const { error } = schema.validate(req.body);
@@ -40,19 +40,31 @@ router.post('/', async (req, res) => {
 			res.json(newCart)
 		} else {
 			let productsInfoArray = [];
-			let totalPrice = 0
-			
+			let totalPrice = 0;
+			let totalQuantity = 0;
+		
 			for ({ productId, quantity } of cart.products) {
-				const productInfo = await Product.findOne({ _id: productId })
-				productsInfoArray.push({ productId: productId, quantity: quantity, productInfo: productInfo })
+				const productInfo = await Product.findOne({ _id: productId });
+				productsInfoArray.push({ productId: productId, quantity: quantity, productInfo: productInfo });
 			}
-
+		
 			for (const singleProduct of productsInfoArray) {
 				const { quantity, productInfo } = singleProduct;
 				totalPrice += quantity * productInfo.price;
+				totalQuantity += quantity;
 			}
-
-			res.json({ products: productsInfoArray, total: totalPrice });
+		
+			let discountRate = 1; // Default no discount
+		
+			if (totalQuantity === 2) {
+				discountRate = 0.9; // 10% discount for total quantity of 2
+			} else if (totalQuantity >= 3) {
+				discountRate = 0.85; // 15% discount for total quantity of 3 or more
+			}
+		
+			const discountedTotalPrice = totalPrice * discountRate;
+		
+			res.json({ products: productsInfoArray, total: discountedTotalPrice });
 		}
 
 	} else {
@@ -70,13 +82,15 @@ router.post('/', async (req, res) => {
 router.post('/add', async (req, res) => {
 	const { fingerprint, products } = req.body;
 	const schema = Joi.object({
-    fingerprint: Joi.string().max(300).required(),
+    fingerprint: Joi.number().required(),
     products: Joi.array().optional(),
   });
 
 	const { error } = schema.validate(req.body);
 
-  if (error) return res.status(400).send(error.details[0].message);
+  if (error) {
+		return res.json({message: error.details[0].message, success: false});
+	}
 
   let cart = await Cart.findOne({ fingerprint: fingerprint });
 
@@ -96,23 +110,36 @@ router.post('/add', async (req, res) => {
 		}
 
 		let productsInfoArray = [];
-		let totalPrice = 0
-		
+		let totalPrice = 0;
+		let totalQuantity = 0;
+
 		// Find products in DB and put them in a single array
 		for ({ productId, quantity } of cart.products) {
-			const productInfo = await Product.findOne({ _id: productId })
-			productsInfoArray.push({ productId: productId, quantity: quantity, productInfo: productInfo })
+			const productInfo = await Product.findOne({ _id: productId });
+			productsInfoArray.push({ productId: productId, quantity: quantity, productInfo: productInfo });
 		}
 
 		// Calculate total price
 		for (const singleProduct of productsInfoArray) {
 			const { quantity, productInfo } = singleProduct;
 			totalPrice += quantity * productInfo.price;
+			totalQuantity += quantity;
 		}
 
-		
+		let discountRate = 1; // Default no discount
+
+		if (totalQuantity === 2) {
+			discountRate = 0.9; // 10% discount for total quantity of 2
+		} else if (totalQuantity >= 3) {
+			discountRate = 0.85; // 15% discount for total quantity of 3 or more
+		}
+
+		const discountedTotalPrice = totalPrice * discountRate;
+
+		// Save the updated cart
 		await cart.save();
-		res.json({ products: productsInfoArray, total: totalPrice });
+
+		res.json({ products: productsInfoArray, total: discountedTotalPrice });
 	} else {
 		// Dont forget to add product to card and then send back
 		cart = new Cart({
@@ -135,22 +162,36 @@ router.post('/add', async (req, res) => {
 		}
 
 		let productsInfoArray = [];
-		let totalPrice = 0
-		
+		let totalPrice = 0;
+		let totalQuantity = 0;
+
 		// Find products in DB and put them in a single array
 		for ({ productId, quantity } of cart.products) {
-			const productInfo = await Product.findOne({ _id: productId })
-			productsInfoArray.push({ productId: productId, quantity: quantity, productInfo: productInfo })
+			const productInfo = await Product.findOne({ _id: productId });
+			productsInfoArray.push({ productId: productId, quantity: quantity, productInfo: productInfo });
 		}
 
 		// Calculate total price
 		for (const singleProduct of productsInfoArray) {
 			const { quantity, productInfo } = singleProduct;
 			totalPrice += quantity * productInfo.price;
+			totalQuantity += quantity;
 		}
 
-		await cart.save()
-		res.json({ products: productsInfoArray, total: totalPrice });
+		let discountRate = 1; // Default no discount
+
+		if (totalQuantity === 2) {
+			discountRate = 0.9; // 10% discount for total quantity of 2
+		} else if (totalQuantity >= 3) {
+			discountRate = 0.85; // 15% discount for total quantity of 3 or more
+		}
+
+		const discountedTotalPrice = totalPrice * discountRate;
+
+		// Save the updated cart
+		await cart.save();
+
+		res.json({ products: productsInfoArray, total: discountedTotalPrice });
 	}
 })
 
@@ -158,13 +199,16 @@ router.post('/add', async (req, res) => {
 router.put('/', async (req, res) => {
 	const { fingerprint, products } = req.body;
 	const schema = Joi.object({
-    fingerprint: Joi.string().max(300).required(),
+    fingerprint: Joi.number().required(),
     products: Joi.array().optional(),
   });
 
 	const { error } = schema.validate(req.body);
 
-  if (error) return res.status(400).send(error.details[0].message);
+  if (error) {
+		console.log(error);
+		return res.json({message: error.details[0].message, success: false});
+	}
 
   let cart = await Cart.findOne({ fingerprint: fingerprint });
 
@@ -180,12 +224,14 @@ router.put('/', async (req, res) => {
 
 
 		let productsInfoArray = [];
-		let totalPrice = 0
-		
+		let totalPrice = 0;
+		let totalQuantity = 0;
+
 		// Find products in DB and put them in a single array
 		for ({ productId, quantity } of cart.products) {
-			const productInfo = await Product.findOne({ _id: productId })
-			productsInfoArray.push({ productId: productId, quantity: quantity, productInfo: productInfo })
+			const productInfo = await Product.findOne({ _id: productId });
+			productsInfoArray.push({ productId: productId, quantity: quantity, productInfo: productInfo });
+			totalQuantity += quantity;
 		}
 
 		// Calculate total price
@@ -194,7 +240,18 @@ router.put('/', async (req, res) => {
 			totalPrice += quantity * productInfo.price;
 		}
 
-		res.json({ products: productsInfoArray, total: totalPrice });
+		let discountRate = 1; // Default no discount
+
+		if (totalQuantity === 2) {
+			discountRate = 0.9; // 10% discount for total quantity of 2
+		} else if (totalQuantity >= 3) {
+			discountRate = 0.85; // 15% discount for total quantity of 3 or more
+		}
+
+		const discountedTotalPrice = totalPrice * discountRate;
+
+		res.json({ products: productsInfoArray, total: discountedTotalPrice });
+
 	} else {
 		// Dont forget to add product to card and then send back
 		cart = new Cart({
@@ -217,22 +274,36 @@ router.put('/', async (req, res) => {
 		}
 
 		let productsInfoArray = [];
-		let totalPrice = 0
-		
+		let totalPrice = 0;
+		let totalQuantity = 0;
+
 		// Find products in DB and put them in a single array
 		for ({ productId, quantity } of cart.products) {
-			const productInfo = await Product.findOne({ _id: productId })
-			productsInfoArray.push({ productId: productId, quantity: quantity, productInfo: productInfo })
+			const productInfo = await Product.findOne({ _id: productId });
+			productsInfoArray.push({ productId: productId, quantity: quantity, productInfo: productInfo });
 		}
 
 		// Calculate total price
 		for (const singleProduct of productsInfoArray) {
 			const { quantity, productInfo } = singleProduct;
 			totalPrice += quantity * productInfo.price;
+			totalQuantity += quantity;
 		}
 
-		await cart.save()
-		res.json({ products: productsInfoArray, total: totalPrice });
+		let discountRate = 1; // Default no discount
+
+		if (totalQuantity === 2) {
+			discountRate = 0.9; // 10% discount for total quantity of 2
+		} else if (totalQuantity >= 3) {
+			discountRate = 0.85; // 15% discount for total quantity of 3 or more
+		}
+
+		const discountedTotalPrice = totalPrice * discountRate;
+
+		// Save the updated cart
+		await cart.save();
+
+		res.json({ products: productsInfoArray, total: discountedTotalPrice });
 	}
 
 

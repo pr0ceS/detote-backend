@@ -3,48 +3,95 @@ const express = require("express");
 const Stripe = require("stripe");
 const { sendPaymentReceive } = require("../middlewares/mailersend");
 const { Order } = require("../models/Order");
+const { Product } = require("../models/Product");
+const crypto = require('crypto');
+const Mega = require('megajs')
+
+const fs = require('fs');
+const path = require('path');
+const PDFDocument = require('pdfkit');
+
+const moment = require('moment');
+const { Readable } = require("stream");
 
 const stripe = Stripe(process.env.STRIPE_KEY);
-const discountFive = process.env.DISCOUNT_FIVE;
-const discountTen = process.env.DISCOUNT_TEN;
-const stripeLocale = process.env.LOCALE;
+const discountFive = process.env.DISCOUNT_FIVE_TEST;
+const discountTen = process.env.DISCOUNT_TEN_TEST;
 const paidUrl = process.env.PAID_URL;
 const cancelUrl = process.env.CANCEL_URL;
 
 const router = express.Router();
 
 router.post("/create-checkout-session", async (req, res) => {
+  if (req.body.cartItems && req.body.cartItems.products) {
+    // Iterate through each product in the products array
+    req.body.cartItems.products.map((product) => {
+        delete product.productInfo;
+    });
+  }
+
+  console.log(req.body.cartItems) 
+
   const customer = await stripe.customers.create({
     metadata: {
       userId: req.body.userId ? req.body.userId : "GUEST",
 			fingerprint: req.body.fingerprint,
+      visitRef: req.body.visitRef,
+      cartItems: JSON.stringify(req.body.cartItems),
     },
   });
 	
-  const line_items = req.body.cartItems.map((item) => {
+  const line_items = await Promise.all(req.body.cartItems.products.map(async ({ productId, quantity }) => {
+    // Perform MongoDB search to get productInfo
+    const productInfo = await Product.findOne({ _id: productId });
+  
+    // Get the base unit amount (in cents)
+    let unitAmount = productInfo.price * 100;
+  
+    // Adjust unit amount based on currency
+    switch (req.body.currency) {
+      case 'eur':
+        // No adjustment for EUR
+        break;
+      case 'usd':
+        // No adjustment for USD
+        break;
+      case 'aud':
+        unitAmount *= 1.68;
+        break;
+      case 'cad':
+        unitAmount *= 1.475;
+        break;
+      case 'gbp':
+        unitAmount *= 0.875;
+        break;
+      default:
+        break;
+    }
+  
     return {
       price_data: {
-        currency: "usd",
+        currency: req.body.currency,
         product_data: {
-          name: item.name,
-          images: [item.image.url],
+          name: productInfo.name,
+          images: [productInfo.image[0]],
           metadata: {
-            id: item.id,
+            id: productInfo._id,
           },
         },
-        unit_amount: item.price * 100,
+        unit_amount: Math.round(unitAmount), // Round to avoid floating-point issues
       },
-      quantity: item.cartQuantity,
+      quantity: quantity,
     };
-  });
-
+  }));
+  
 	// Discount calculator
 	let totalProducts = 0;
 	let discount = 0;
 
-	for (const item of req.body.cartItems) {
-		if (item.hasOwnProperty('cartQuantity')) {
-			totalProducts += item.cartQuantity;
+	for (const item of req.body.cartItems.products) {
+		if (item.hasOwnProperty('quantity')) {
+			totalProducts += item.quantity;
 		}
 	}
 
@@ -56,9 +103,8 @@ router.post("/create-checkout-session", async (req, res) => {
 
   // "sofort", "bancontact", "klarna", "customer_balance", "sepa_debit", "giropay", "eps",
   const session = await stripe.checkout.sessions.create({
-    payment_method_types: ["bancontact", "ideal", "paypal", "klarna", "card"],
     shipping_address_collection: {
-      allowed_countries: ["NL","DE", "BE"],
+      allowed_countries: ["US", "GB", "AU", "CA", "SE", "NO", "NZ", "AT", "CH", "LU", "NL", "DE", "BE"],
     },
     shipping_options: [
       {
@@ -66,7 +112,7 @@ router.post("/create-checkout-session", async (req, res) => {
           type: "fixed_amount",
           fixed_amount: {
             amount: req.body.insurance ? 299 : 0,
-            currency: "usd",
+            currency: req.body.currency,
           },
           display_name: req.body.insurance ? "Shipping Protection" : "Free Shipping",
           delivery_estimate: {
@@ -88,7 +134,7 @@ router.post("/create-checkout-session", async (req, res) => {
 		] : [],
     mode: "payment",
     customer: customer.id,
-    locale: stripeLocale,
+    locale: "auto",
     success_url: `${process.env.CLIENT_URL}${paidUrl}`,
     cancel_url: `${process.env.CLIENT_URL}${cancelUrl}`,
   });
@@ -96,24 +142,194 @@ router.post("/create-checkout-session", async (req, res) => {
   res.json({ url: session.url });
 });
 
-// Create order function
-const createOrder = async (customer, data, lineItems) => {
-  const newOrder = new Order({
-		userId: await customer?.metadata?.userId ? await customer?.metadata?.userId : "GUEST",
-		fingerprint: await customer?.metadata?.fingerprint,
-    products: await lineItems?.data,
-    total: await data?.amount_total,
-    customerInfo: await data?.customer_details,
-    payment_status: await data?.payment_status,
-		insurance: await data?.shipping_cost?.amount_total === 299 ? true : false,
-    customerId: await data?.customer,
-  });
-  try {
+const createInvoiceAndOrder = async (customer, data, lineItems) => {
+	try {
+    console.log(lineItems);
+    const randomReference = await crypto.randomBytes(4).toString('hex');
+    const newOrder = await new Order({
+      userId: await customer?.metadata?.userId ? await customer?.metadata?.userId : "GUEST",
+      fingerprint: await customer?.metadata?.fingerprint,
+      visitRef: await customer?.metadata?.visitRef,
+      products: await lineItems,
+      total: await data?.amount_total,
+      customerInfo: await data?.customer_details,
+      payment_status: await data?.payment_status,
+      insurance: await data?.shipping_cost?.amount_total === 299 ? true : false,
+      reference: await randomReference.toUpperCase(),
+      customerId: await data?.customer,
+    });
     await newOrder.save();
-  } catch (err) {
+
+    const orderAmount = await Order.countDocuments();
+    try {
+      const uploadToMega = async (doc) => {
+        const storage = new Mega.Storage({
+          email: 'mkbtradingnl@gmail.com', // Replace with your MEGA email
+          password: 'Mksuperboy12', // Replace with your MEGA password
+        });
+      
+        const fileName = `invoice_${`F0000${orderAmount}`}_${randomReference.toUpperCase()}_${moment(Date.now()).locale("nl").format('L')}.pdf`;
+      
+        // Create a Readable stream for the PDF content
+        const pdfBuffer = await new Promise((resolve) => {
+          const chunks = [];
+          doc.on('data', (chunk) => chunks.push(chunk));
+          doc.on('end', () => resolve(Buffer.concat(chunks)));
+        });
+      
+        const fileReadStream = Readable.from(pdfBuffer);
+      
+        // Upload the PDF directly to MEGA
+        storage.once('ready', async () => {
+          try {
+            await storage.upload({
+              name: fileName,
+              size: pdfBuffer.length,
+            }, fileReadStream).complete;
+      
+            console.log('Successfully uploaded to MEGA.');
+          } catch (error) {
+            console.error('Error uploading to MEGA:', error);
+          }
+        });
+      
+        storage.once('error', (error) => {
+          console.error('MEGA storage error:', error);
+        });
+      };
+
+    const doc = new PDFDocument({ margin: 40, size: "A4",});
+
+    doc.fontSize(20)
+      .font("Helvetica")
+      .text("Invoice", 40, 98, {fontWeight: 800})
+      .fillColor('#000000')
+      .font("Helvetica")
+      .fontSize(10)
+      .text('MKB-Trading', 200, 30, { align: 'right'})
+      .text('Jaargetijdenweg 29-3,', 200, 42, { align: 'right' })
+      .text('7532 SX Enschede', 200, 54, { align: 'right' })
+      .text('KVK: 88897818', 200, 75, { align: 'right' })
+      .text('BTW: NL 004667125B52', 200, 87, { align: 'right' })
+      .moveDown();
+
+    doc
+      .strokeColor("#aaaaaa")
+      .lineWidth(1)
+      .moveTo(40, 140)
+      .lineTo(557, 140)
+      .stroke()
+      .moveDown();
+
+    doc
+      .fontSize(12)
+      .font("Helvetica-Bold")
+      .text("Invoice to:", 40, 155)
+      .fontSize(12)
+      .font("Helvetica")
+      .text(data?.customer_details?.name, 40, 170)
+      .text(data?.customer_details?.address?.line1, 40, 185)
+      .text(`${data?.customer_details?.address?.postal_code} ${data.customer_details.address.city}`, 40, 200)
+      .moveDown();
+      
+    doc
+      .fontSize(12)
+      .font("Helvetica-Bold")
+      .text("Invoice number:", 330, 158)
+      .text("Date:", 330, 177)
+      .text("Reference:", 330, 197)
+
+      .font("Helvetica")
+      .text(`F0000${orderAmount ? (orderAmount) : 1}`, 230, 158, {align: "right"})
+      .text(moment(Date.now()).locale("nl").format('L'), 230, 177, {align: "right"})
+      .text(randomReference.toUpperCase(), 230, 197, {align: "right"})
+      .moveDown();
+
+    doc
+      .strokeColor("#aaaaaa")
+      .lineWidth(1)
+      .moveTo(40, 225)
+      .lineTo(557, 225)
+      .stroke()
+      .moveDown();
+
+    doc
+      .fontSize(12)
+      .font("Helvetica-Bold")
+      .text("Description", 40, 300, {fontWeight: 800})
+      .text("Amount", 270, 300, {fontWeight: 800})
+      .text("Unit price (€ )", 340, 300, {fontWeight: 800})
+      .text("Total amount (€ )", 453, 300, {fontWeight: 800})
+      .moveDown();
+
+    doc
+      .strokeColor("#999999")
+      .lineWidth(1)
+      .moveTo(40, 318)
+      .lineTo(557, 318)
+      .stroke()
+      .moveDown();
+    
+    let margin1 = 30;
+    let totals = 0;
+    let totalInSumme = 0;
+    let tax = 0;
+
+    doc.fontSize(10)
+    doc.font("Helvetica")
+      lineItems?.data?.push({
+        amount_total: data?.shipping_cost?.amount_total === 299 ? 299 : 0,
+        quantity: 1,
+        description: data?.shipping_cost?.amount_total === 299 ? "Shipping protection" : "Free shipping",
+      })
+      lineItems?.data?.map((product, index) => {
+        doc.text(product?.description, 40, (298 + (index + 1) * margin1))
+        doc.text(product?.quantity, 0, (298 + (index + 1) * margin1), {align: "right", width: 307})
+        doc.text((product?.amount_total / product?.quantity / 100).toLocaleString('en-us', { maximumFractionDigits: 2, minimumFractionDigits: 2}), 0, (298 + (index + 1) * margin1), {align: "right", width: 422})
+        doc.text((product?.amount_total / 100).toLocaleString('en-us', { maximumFractionDigits: 2, minimumFractionDigits: 2}), 0, (298 + (index + 1) * margin1), {align: "right"})
+        doc
+        .strokeColor("#aaaaaa")
+        .lineWidth(1)
+        .moveTo(40, (317 + (index + 1) * margin1))
+        .lineTo(557, (317 + (index + 1) * margin1))
+        .stroke()
+        doc.moveDown()
+        totals = margin1 * (index + 1)
+        totalInSumme = totalInSumme + product?.amount_total
+      })
+    totals = totals
+    doc.font("Helvetica")
+    doc.text("Subtotal", 0, (totals + 30 + 298), {align: "right", width: 422})
+    doc.text("Total amount Excl. VAT", 0, (totals + 47 + 298), {align: "right", width: 422})
+    doc.font("Helvetica-Bold")
+    doc.text("VAT % ", 0, (totals + 64 + 298), {align: "right", width: 422})
+    doc.text("Total amount Excl. VAT", 0, (totals + 81 + 298), {align: "right", width: 422})
+    doc.moveDown()
+
+    doc.font("Helvetica")
+    doc.text("€ " + (totalInSumme / 100).toLocaleString('en-us', { maximumFractionDigits: 2, minimumFractionDigits: 2}), 0, (totals + 30 + 298), {align: "right"})
+    doc.text("€ " + (totalInSumme / 100).toLocaleString('en-us', { maximumFractionDigits: 2, minimumFractionDigits: 2}), 0, (totals + 47 + 298), {align: "right"})
+    doc.font("Helvetica-Bold")
+    doc.text(`${tax}%`, 0, (totals + 64 + 298), {align: "right"})
+    doc.text("€ " + ((totalInSumme * (tax / 100) + totalInSumme) / 100).toLocaleString('en-us', { maximumFractionDigits: 2, minimumFractionDigits: 2}), 0, (totals + 81 + 298), {align: "right"})
+
+    doc.fontSize(10)
+      .text(
+        "Exemption from Dutch VAT in accordance with Article 25 of the Dutch VAT Act",
+        0,
+        780,
+        {align: "center", width: 600}
+      )
+
+    doc.end();
+    uploadToMega(doc);
+    } catch (error) {
+      console.log(error);	
+    }
+  } catch(err) {
     console.log(err);
   }
-};
+}
 
 // Stripe webhoook
 router.post(
@@ -126,7 +342,7 @@ router.post(
 
     // Check if webhook signing is configured.
     let webhookSecret;
-    //webhookSecret = process.env.STRIPE_WEB_HOOK;
+    // webhookSecret = process.env.STRIPE_WEB_HOOK;
 
     if (webhookSecret) {
       // Retrieve the event by verifying the signature using the raw body and secret.
@@ -164,15 +380,16 @@ router.post(
             stripe.checkout.sessions.listLineItems(
               data.id,
               {},
-              function (err, lineItems) {
-									createInvoiceAndOrder(customer, data, lineItems)
-									.then((savedInvoice) => sendPaymentReceive(customer?.email, "We have received your order!", savedInvoice))
+              async function (err, lineItems) {
+									await createInvoiceAndOrder(customer, data, lineItems)
+									// .then((savedInvoice) => sendPaymentReceive(customer?.email, "We have received your order!", savedInvoice))
+									.then(() => console.log(customer?.email, "We have received your order!"))
 									.catch((e) => console.log(e));
 
               }
             );
           } catch (err) {
-            console.log(typeof createOrder);
+            console.log(typeof createInvoiceAndOrder);
             console.log(err);
           }
         })

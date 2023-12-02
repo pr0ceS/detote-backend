@@ -16,9 +16,11 @@
     "joi": "^17.11.0",
     "jsonwebtoken": "^9.0.2",
     "mailersend": "^2.2.0",
+    "megajs": "^1.1.4",
     "moment": "^2.29.4",
     "mongoose": "^7.6.3",
     "morgan": "^1.10.0",
+    "pdfkit": "^0.14.0",
     "slugify": "^1.6.6",
     "stripe": "^14.2.0"
   },

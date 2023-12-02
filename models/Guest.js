@@ -16,6 +16,8 @@ const guestSchema = new mongoose.Schema(
 				utmSource: { type: String },
 				utmMedium: { type: String },
 				referrer: { type: String },
+				device: {type: String},
+				date: {type: Date},
 			}
 		],
 	},
