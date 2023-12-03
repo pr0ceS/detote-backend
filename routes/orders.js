@@ -29,11 +29,11 @@ router.put("/:id", isAdmin, async (req, res) => {
   }
 });
 
-router.put('/registered/:id', isUser, async (req, res) => {
+router.put('/registered/:cartid', async (req, res) => {
   try {
     // Find the corresponding Order by ID and update the userId
     const updatedOrder = await Order.findByIdAndUpdate(
-      req.params.id,
+      req.params.cartid,
       {
         $set: { userId: req.body.userId }, // Update the userId field
       },

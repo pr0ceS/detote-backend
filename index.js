@@ -1,4 +1,5 @@
 const express = require('express');
+const cookieParser = require('cookie-parser');
 const cors = require("cors");
 const mongoose = require("mongoose");
 const helmet = require('helmet');
@@ -23,6 +24,7 @@ const app = express();
 require("dotenv").config();
 
 app.set('trust proxy', true);
+app.use(cookieParser());
 app.use(cors({ credentials: true }));
 app.use(express.json({ limit: '50000mb'}));
 app.use(helmet());

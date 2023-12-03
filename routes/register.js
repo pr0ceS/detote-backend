@@ -38,7 +38,7 @@ router.post("/", async (req, res) => {
 
   const token = generateAuthToken(user);
 
-  res.json({ cookie: token, success: true })
+  res.json({user: user._id, cookie: token, success: true })
 });
 
 module.exports = router;
