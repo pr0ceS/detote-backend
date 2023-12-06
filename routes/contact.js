@@ -1,12 +1,13 @@
 const express = require('express');
 const { Contact }= require('../models/Contact');
-const { Mail } = require('../models/Mail');
 const { isAdmin } = require("../middlewares/auth");
 
 const router = express.Router();
 
 router.post('/', async (req, res) => {
-	const {email, name, message} = req.body;
+	const {email, name, orderNumber, message} = req.body;
+
+	console.log(req.body);
 
 	if(!email || !name || !message) {
 		res.json({message: "Please fill in all fields"});
@@ -18,15 +19,13 @@ router.post('/', async (req, res) => {
 
 	else {
 		try {
-			const newMail = Mail({ email: email })
-			
 			const newContact = new Contact({
 				email: email,
 				name: name,
+				orderNumber: orderNumber,
 				message: message
 			})
 			
-			await newMail.save()
 			await newContact.save();
 			res.json({message: "Sent successfully"})
 		} catch (error) {
