@@ -4,6 +4,11 @@ const { Guest } = require('../models/Guest');
 
 const router = express.Router();
 
+// Test 200
+router.get('/200', (req, res) => {
+	res.status(200)
+})
+
 // Create new Guest
 router.post('/', async (req, res) => {
 	// Create new Guest visitor
