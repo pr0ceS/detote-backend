@@ -6,7 +6,7 @@ const router = express.Router();
 
 // Test 200
 router.get('/200', (req, res) => {
-	res.status(200)
+	res.status(200).json("OK")
 })
 
 // Create new Guest
