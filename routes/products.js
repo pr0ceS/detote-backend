@@ -11,8 +11,11 @@ router.get('/', async (req, res) => {
   try {
     const products = await Product.find();
 
+    // Convert Mongoose documents to plain JavaScript objects
+    const plainProducts = products.map(product => product.toObject());
+
     // Remove 'reviews' property from each product
-    const productsWithoutReviews = products.map(({ reviews, ...rest }) => rest);
+    const productsWithoutReviews = plainProducts.map(({ reviews, ...rest }) => rest);
 
     res.json(productsWithoutReviews);
   } catch (error) {
