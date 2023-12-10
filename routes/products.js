@@ -32,7 +32,7 @@ router.get("/find/:url", async (req, res) => {
 
 // Create new Product ADMIN
 router.post("/", isAdmin, async (req, res) => {
-  const { name, desc, smallDesc, dropdowns, price, oldPrice, image, stock, deliveryTime, soldOut } = req.body;
+  const { name, desc, metaDesc, smallDesc, dropdowns, price, oldPrice, image, stock, deliveryTime, soldOut } = req.body;
 
   try {
     if (image) {
@@ -47,6 +47,7 @@ router.post("/", isAdmin, async (req, res) => {
           const product = new Product({
             name,
             desc,
+            metaDesc,
             smallDesc,
             dropdowns,
             url: await slugify(name).toLowerCase(),
@@ -171,5 +172,48 @@ router.post('/review', async (req, res) => {
     res.json({review: updatedProductReview, success: true});
   }
 })
+
+router.post('/generatereview', async (req, res) => {
+  const { name, email, stars, message, title, url } = req.body;
+  const schema = Joi.object({
+    name: Joi.string().max(100).required(),
+    email: Joi.string().email().max(200).required(),
+    stars: Joi.number().min(1).max(5).required(),
+    message: Joi.string().required(),
+    title: Joi.string().required(),
+    url: Joi.string().max(300).required(),
+  });
+
+  const { error } = schema.validate(req.body);
+
+  if (error) return res.json({ message: error.details[0].message, success: false });
+
+  let product = await Product.findOne({ url: url });
+
+  if (product) {
+    let currentDate = product.reviews.length > 0 ? product.reviews[product.reviews.length - 1].date : new Date('2023-11-28').getTime();
+
+    // Decrement the date for each review post
+    const reviewsLength = product.reviews.length + 1;
+    const oneDayInMilliseconds = 24 * 60 * 60 * 1000; // One day in milliseconds
+
+    // Calculate the new date
+    currentDate -= oneDayInMilliseconds;
+
+    const updatedProductReview = {
+      name: name,
+      email: email,
+      stars: stars,
+      title: title,
+      message: message,
+      date: currentDate,
+    };
+
+    product.reviews.push(updatedProductReview);
+
+    await product.save();
+    res.json({ review: updatedProductReview, success: true });
+  }
+});
 
 module.exports = router;
