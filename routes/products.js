@@ -6,8 +6,20 @@ const Joi = require("joi");
 
 const router = require("express").Router();
 
-// Get all Products
+// Get all products
 router.get('/', async (req, res) => {
+  try {
+    const products = await Product.find();
+
+    res.json(products);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+// Get products without reviews
+router.get('/withoutreviews', async (req, res) => {
   try {
     const products = await Product.find();
 
