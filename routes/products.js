@@ -7,15 +7,17 @@ const Joi = require("joi");
 const router = require("express").Router();
 
 // Get all Products
-router.get("/", async (req, res) => {
+router.get('/', async (req, res) => {
   try {
-		const products = await Product.find()
+    const products = await Product.find();
 
-    res.json(products);
+    // Remove 'reviews' property from each product
+    const productsWithoutReviews = products.map(({ reviews, ...rest }) => rest);
+
+    res.json(productsWithoutReviews);
   } catch (error) {
-		// Delete in Production
-		console.log(error);
-    res.status(500).json({message: error});
+    console.error(error);
+    res.status(500).json({ message: 'Internal Server Error' });
   }
 });
 
@@ -210,6 +212,14 @@ router.post('/generatereview', async (req, res) => {
     };
 
     product.reviews.push(updatedProductReview);
+
+    const reviewSum = product.reviews.reduce((sum, review) => sum + review.stars, 0);
+    const reviewAverage = reviewSum / reviewsLength;
+    const reviewCount = reviewsLength;
+
+    // Update Product document
+    product.reviewAverage = reviewAverage;
+    product.reviewCount = reviewCount;
 
     await product.save();
     res.json({ review: updatedProductReview, success: true });
