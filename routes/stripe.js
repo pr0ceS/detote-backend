@@ -15,7 +15,6 @@ const moment = require('moment');
 const { Readable } = require("stream");
 
 const stripe = Stripe(process.env.STRIPE_KEY);
-const discountFive = process.env.DISCOUNT_FIVE_TEST;
 const discountTen = process.env.DISCOUNT_TEN_TEST;
 const paidUrl = process.env.PAID_URL;
 const cancelUrl = process.env.CANCEL_URL;
@@ -25,23 +24,40 @@ const router = express.Router();
 router.post("/create-checkout-session", async (req, res) => {
   if (req.body.cartItems && req.body.cartItems.products) {
     // Iterate through each product in the products array
-    req.body.cartItems.products.map((product) => {
-        delete product.productInfo;
+    req.body.cartItems.products.forEach((product) => {
+      const freeStatus = product.productInfo && product.productInfo.free;
+  
+      // Keep these properties
+      const { productId, quantity, model } = product;
+  
+      // Clear all properties of the product except productInfo.free
+      Object.keys(product).forEach((key) => {
+        if (key !== 'productInfo' && key !== 'productId' && key !== 'quantity' && key !== 'model') {
+          delete product[key];
+        }
+      });
+  
+      // Set productInfo.free back to its original value
+      product.productInfo = { free: freeStatus };
+  
+      // Restore kept properties
+      product.productId = productId;
+      product.quantity = quantity;
+      product.model = model;
     });
   }
-
-  console.log(req.body.cartItems) 
+  
+  
 
   const customer = await stripe.customers.create({
     metadata: {
       userId: req.body.userId ? req.body.userId : "GUEST",
 			fingerprint: req.body.fingerprint,
       visitRef: req.body.visitRef,
-      cartItems: JSON.stringify(req.body.cartItems),
     },
   });
-	
-  const line_items = await Promise.all(req.body.cartItems.products.map(async ({ productId, quantity }) => {
+
+  const line_items = await Promise.all(req.body.cartItems.products.map(async ({ productId, quantity, model }) => {
     // Perform MongoDB search to get productInfo
     const productInfo = await Product.findOne({ _id: productId });
   
@@ -73,7 +89,7 @@ router.post("/create-checkout-session", async (req, res) => {
       price_data: {
         currency: req.body.currency,
         product_data: {
-          name: productInfo.name,
+          name: `${productInfo.name}${model ? `,${model}` : ""}`,
           images: [productInfo.image[0]],
           metadata: {
             id: productInfo._id,
@@ -90,14 +106,12 @@ router.post("/create-checkout-session", async (req, res) => {
 	let discount = 0;
 
 	for (const item of req.body.cartItems.products) {
-		if (item.hasOwnProperty('quantity')) {
-			totalProducts += item.quantity;
-		}
-	}
+    if (item.hasOwnProperty('quantity') && (!item.productInfo || !item.productInfo.free)) {
+      totalProducts += item.quantity;
+    }
+  }  
 
-	if (totalProducts === 2) {
-		discount = 5; // Apply 5% discount if they buy 2 products
-	} else if (totalProducts >= 3) {
+	if (totalProducts >= 3) {
 		discount = 10; // Apply 10% discount if they buy 3 or more products
 	}
 
@@ -114,22 +128,12 @@ router.post("/create-checkout-session", async (req, res) => {
             amount: req.body.insurance ? 299 : 0,
             currency: req.body.currency,
           },
-          display_name: req.body.insurance ? "Shipping Protection" : "Free Shipping",
-          delivery_estimate: {
-            minimum: {
-              unit: "business_day",
-              value: 4,
-            },
-            maximum: {
-              unit: "business_day",
-              value: 7,
-            },
-          },
+          display_name: req.body.insurance ? "Shipping Protection" : "Free Shipping"
         }}],
     line_items,
 		discounts: discount !== 0 ? [
 			{
-				coupon: discount === 5 ? discountFive : discount === 10 ? discountTen : ""
+				coupon: discount === 10 ? discountTen : ""
 			}
 		] : [],
     mode: "payment",
@@ -144,7 +148,6 @@ router.post("/create-checkout-session", async (req, res) => {
 
 const createInvoiceAndOrder = async (customer, data, lineItems) => {
 	try {
-    console.log(lineItems);
     const randomReference = await crypto.randomBytes(4).toString('hex');
     const newOrder = await new Order({
       userId: await customer?.metadata?.userId ? await customer?.metadata?.userId : "GUEST",

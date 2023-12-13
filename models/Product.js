@@ -24,6 +24,10 @@ const productSchema = new mongoose.Schema(
 				date: { type: Date },
 			}
 		],
+		reviewCount: {type: Number},
+		reviewAverage: {type: Number},
+		models: {type: Array},
+		free: {type: Boolean, default: false}
   },
   { timestamps: true }
 );

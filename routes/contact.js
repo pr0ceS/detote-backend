@@ -7,8 +7,6 @@ const router = express.Router();
 router.post('/', async (req, res) => {
 	const {email, name, orderNumber, message} = req.body;
 
-	console.log(req.body);
-
 	if(!email || !name || !message) {
 		res.json({message: "Please fill in all fields"});
 	}

@@ -27,7 +27,27 @@ router.get('/withoutreviews', async (req, res) => {
     const plainProducts = products.map(product => product.toObject());
 
     // Remove 'reviews' property from each product
-    const productsWithoutReviews = plainProducts.map(({ reviews, ...rest }) => rest);
+    const productsWithoutReviews = plainProducts.map(({ reviews, desc, dropdowns, ...rest }) => rest);
+
+    res.json(productsWithoutReviews);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+router.get('/gifts', async (req, res) => {
+  try {
+    const products = await Product.find();
+
+    // Filter products where the 'free' key is true
+    const giftProducts = products.filter(product => product.free === true);
+
+    // Convert Mongoose documents to plain JavaScript objects
+    const plainGiftProducts = giftProducts.map(product => product.toObject());
+
+    // Remove 'reviews' property from each product
+    const productsWithoutReviews = plainGiftProducts.map(({ reviews, ...rest }) => rest);
 
     res.json(productsWithoutReviews);
   } catch (error) {
@@ -49,7 +69,7 @@ router.get("/find/:url", async (req, res) => {
 
 // Create new Product ADMIN
 router.post("/", isAdmin, async (req, res) => {
-  const { name, desc, metaDesc, smallDesc, dropdowns, price, oldPrice, image, stock, deliveryTime, soldOut } = req.body;
+  const { name, desc, metaDesc, smallDesc, dropdowns, price, oldPrice, image, stock, deliveryTime, soldOut, models, free } = req.body;
 
   try {
     if (image) {
@@ -74,6 +94,8 @@ router.post("/", isAdmin, async (req, res) => {
             stock,
             deliveryTime,
             soldOut,
+            models,
+            free
           });
           
           const savedProduct = await product.save();
@@ -184,6 +206,14 @@ router.post('/review', async (req, res) => {
     }
 
     product.reviews.push(updatedProductReview)
+
+    const reviewCount = product.reviews.length;
+    const reviewSum = product.reviews.reduce((sum, review) => sum + review.stars, 0);
+    const reviewAverage = reviewSum / reviewCount;
+
+    // Update Product document
+    product.reviewAverage = reviewAverage;
+    product.reviewCount = reviewCount;
   
     await product.save();
     res.json({review: updatedProductReview, success: true});
