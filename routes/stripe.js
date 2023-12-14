@@ -22,32 +22,34 @@ const cancelUrl = process.env.CANCEL_URL;
 const router = express.Router();
 
 router.post("/create-checkout-session", async (req, res) => {
-  if (req.body.cartItems && req.body.cartItems.products) {
+  if (req.body.cartItems) {
     // Iterate through each product in the products array
-    req.body.cartItems.products.forEach((product) => {
-      const freeStatus = product.productInfo && product.productInfo.free;
-  
-      // Keep these properties
-      const { productId, quantity, model } = product;
+    req.body.cartItems.forEach((product) => {
+      const freeStatus = product.product && product.product.free;
+      const image = product.product && product.product.image;
+      const name = product.product && product.product.name;
+      const price = product.product && product.product.price;
+      const quantity = product.quantity;
+      const model = product.model;
   
       // Clear all properties of the product except productInfo.free
-      Object.keys(product).forEach((key) => {
-        if (key !== 'productInfo' && key !== 'productId' && key !== 'quantity' && key !== 'model') {
-          delete product[key];
+      Object.keys(product.product).forEach((key) => {
+        if (key !== '_id' && key !== 'free') {
+          delete product.product[key];
         }
       });
   
       // Set productInfo.free back to its original value
-      product.productInfo = { free: freeStatus };
+      product.product.free = freeStatus;
+      product.product.image = image;
+      product.product.name = name;
+      product.product.price = price;
   
-      // Restore kept properties
-      product.productId = productId;
+      // Update quantity and model
       product.quantity = quantity;
       product.model = model;
     });
   }
-  
-  
 
   const customer = await stripe.customers.create({
     metadata: {
@@ -57,9 +59,9 @@ router.post("/create-checkout-session", async (req, res) => {
     },
   });
 
-  const line_items = await Promise.all(req.body.cartItems.products.map(async ({ productId, quantity, model }) => {
+  const line_items = await Promise.all(req.body.cartItems.map(async ({ product, quantity, model }) => {
     // Perform MongoDB search to get productInfo
-    const productInfo = await Product.findOne({ _id: productId });
+    const productInfo = await Product.findOne({ _id: product._id });
   
     // Get the base unit amount (in cents)
     let unitAmount = productInfo.price * 100;
@@ -89,10 +91,10 @@ router.post("/create-checkout-session", async (req, res) => {
       price_data: {
         currency: req.body.currency,
         product_data: {
-          name: `${productInfo.name}${model ? `,${model}` : ""}`,
-          images: [productInfo.image[0]],
+          name: `${product.name}${model ? `,${model}` : ""}`,
+          images: [product.image[0]],
           metadata: {
-            id: productInfo._id,
+            id: product._id,
           },
         },
         unit_amount: Math.round(unitAmount), // Round to avoid floating-point issues
@@ -105,8 +107,8 @@ router.post("/create-checkout-session", async (req, res) => {
 	let totalProducts = 0;
 	let discount = 0;
 
-	for (const item of req.body.cartItems.products) {
-    if (item.hasOwnProperty('quantity') && (!item.productInfo || !item.productInfo.free)) {
+	for (const item of req.body.cartItems) {
+    if (item.hasOwnProperty('quantity') && (!item.product || !item.product.free)) {
       totalProducts += item.quantity;
     }
   }  

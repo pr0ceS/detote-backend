@@ -17,7 +17,6 @@ const mailRoute = require('./routes/mail');
 const guestRoute = require('./routes/guest');
 const adminRoute = require('./routes/admin');
 const contactRoute = require('./routes/contact');
-const cartRoute = require('./routes/cart');
 
 const app = express();
 
@@ -41,7 +40,6 @@ app.use("/api/orders", ordersRoute);
 app.use("/api/mail", mailRoute);
 app.use("/api/guest", guestRoute);
 app.use("/api/contact", contactRoute);
-app.use("/api/cart", cartRoute);
 
 
 const uri = process.env.DB_URI;
