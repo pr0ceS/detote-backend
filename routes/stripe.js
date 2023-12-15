@@ -1,7 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const Stripe = require("stripe");
-const { sendPaymentReceive } = require("../middlewares/mailersend");
+const { sendOutMails } = require("../middlewares/mailersend");
 const { Order } = require("../models/Order");
 const { Product } = require("../models/Product");
 const crypto = require('crypto');
@@ -21,7 +21,9 @@ const cancelUrl = process.env.CANCEL_URL;
 
 const router = express.Router();
 
+
 router.post("/create-checkout-session", async (req, res) => {
+  const randomReference = await crypto.randomBytes(4).toString('hex');
   if (req.body.cartItems) {
     // Iterate through each product in the products array
     req.body.cartItems.forEach((product) => {
@@ -56,6 +58,7 @@ router.post("/create-checkout-session", async (req, res) => {
       userId: req.body.userId ? req.body.userId : "GUEST",
 			fingerprint: req.body.fingerprint,
       visitRef: req.body.visitRef,
+      ordernumber: randomReference.toUpperCase()
     },
   });
 
@@ -150,7 +153,6 @@ router.post("/create-checkout-session", async (req, res) => {
 
 const createInvoiceAndOrder = async (customer, data, lineItems) => {
 	try {
-    const randomReference = await crypto.randomBytes(4).toString('hex');
     const newOrder = await new Order({
       userId: await customer?.metadata?.userId ? await customer?.metadata?.userId : "GUEST",
       fingerprint: await customer?.metadata?.fingerprint,
@@ -160,7 +162,7 @@ const createInvoiceAndOrder = async (customer, data, lineItems) => {
       customerInfo: await data?.customer_details,
       payment_status: await data?.payment_status,
       insurance: await data?.shipping_cost?.amount_total === 299 ? true : false,
-      reference: await randomReference.toUpperCase(),
+      reference: await customer?.metadata?.ordernumber,
       customerId: await data?.customer,
     });
     await newOrder.save();
@@ -173,7 +175,7 @@ const createInvoiceAndOrder = async (customer, data, lineItems) => {
           password: 'Mksuperboy12', // Replace with your MEGA password
         });
       
-        const fileName = `invoice_${`F0000${orderAmount}`}_${randomReference.toUpperCase()}_${moment(Date.now()).locale("nl").format('L')}.pdf`;
+        const fileName = `invoice_${`F0000${orderAmount}`}_${customer?.metadata?.ordernumber}_${moment(Date.now()).locale("nl").format('L')}.pdf`;
       
         // Create a Readable stream for the PDF content
         const pdfBuffer = await new Promise((resolve) => {
@@ -247,7 +249,7 @@ const createInvoiceAndOrder = async (customer, data, lineItems) => {
       .font("Helvetica")
       .text(`F0000${orderAmount ? (orderAmount) : 1}`, 230, 158, {align: "right"})
       .text(moment(Date.now()).locale("nl").format('L'), 230, 177, {align: "right"})
-      .text(randomReference.toUpperCase(), 230, 197, {align: "right"})
+      .text(customer?.metadata?.ordernumber.toUpperCase(), 230, 197, {align: "right"})
       .moveDown();
 
     doc
@@ -387,8 +389,8 @@ router.post(
               {},
               async function (err, lineItems) {
 									await createInvoiceAndOrder(customer, data, lineItems)
-									// .then((savedInvoice) => sendPaymentReceive(customer?.email, "We have received your order!", savedInvoice))
-									.then(() => console.log(customer?.email, "We have received your order!"))
+									// .then(() => sendPaymentReceive(customer?.email, customer?.))
+                  .then(() => sendOutMails(customer?.email, data.shipping_details.name, customer.metadata.ordernumber))
 									.catch((e) => console.log(e));
 
               }
