@@ -21,15 +21,11 @@ router.get('/', async (req, res) => {
 // Get products without reviews
 router.get('/withoutreviews', async (req, res) => {
   try {
-    const products = await Product.find();
+    // Use projection to fetch only necessary fields
+    const products = await Product.find({}, { reviews: 0 });
 
-    // Convert Mongoose documents to plain JavaScript objects
-    const plainProducts = products.map(product => product.toObject());
-
-    // Remove 'reviews' property from each product
-    const productsWithoutReviews = plainProducts.map(({ reviews, desc, dropdowns, ...rest }) => rest);
-
-    res.json(productsWithoutReviews);
+    // Send the response directly without converting to plain objects
+    res.json(products);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Internal Server Error' });
