@@ -117,7 +117,7 @@ router.post("/create-checkout-session", async (req, res) => {
   }  
 
 	if (totalProducts >= 3) {
-		discount = 10; // Apply 10% discount if they buy 3 or more products
+		discount = 10; // Apply 15% discount if they buy 3 or more products
 	}
 
   // "sofort", "bancontact", "klarna", "customer_balance", "sepa_debit", "giropay", "eps",
@@ -390,7 +390,7 @@ router.post(
               async function (err, lineItems) {
 									await createInvoiceAndOrder(customer, data, lineItems)
 									// .then(() => sendPaymentReceive(customer?.email, customer?.))
-                  .then(() => sendOutMails(customer?.email, data.shipping_details.name, customer.metadata.ordernumber))
+                  .then(() => sendOutMails(customer.email, data.shipping_details.name, customer.metadata.ordernumber))
 									.catch((e) => console.log(e));
 
               }

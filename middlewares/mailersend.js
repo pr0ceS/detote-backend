@@ -45,30 +45,8 @@ const scheduleEmail = (email, subject, templateId, personalization, delay) => {
   const taskKey = `${email}-${subject}`;
 
   // Save the timestamp for recovery in case of a crash
-  // saveTaskToDatabase(taskKey, Date.now() + delay);
-  saveTaskToDatabase(taskKey, Date.now() + delay * 60 * 1000);
-
-  // Schedule the task using cron
-  // cron.schedule(`*/${delay / 60000} * * * *`, async () => {
-  //   try {
-  //     await mailerSend.email.send(emailParams);
-  //     // Remove the task from the database after it's sent
-  //     await ScheduledTask.deleteOne({ taskKey });
-  //   } catch (error) {
-  //     console.error(error);
-  //   }
-  // });
-
-
-	// setTimeout(async () => {
-	// 	try {
-	// 		await mailerSend.email.send(emailParams);
-	// 		// Remove the task from the database after it's sent
-	// 		await ScheduledTask.deleteOne({ taskKey });
-	// 	} catch (error) {
-	// 		console.error(error);
-	// 	}
-	// }, (delay * 86400000));
+  // saveTaskToDatabase(taskKey, Date.now() + delay * 60 * 1000);
+  saveTaskToDatabase(taskKey, Date.now() + delay);
 
 	if(delay === 0) {
 		mailerSend.email.send(emailParams);

@@ -7,7 +7,7 @@ const productSchema = new mongoose.Schema(
     metaDesc: { type: String },
 		smallDesc: { type: Array },
 		dropdowns: { type: Array },
-		url: {type: String, required: true, unique: true },
+		url: {type: String, required: true },
     price: { type: Number, required: true },
     oldPrice: { type: Number },
     image: { type: Array, required: true },
