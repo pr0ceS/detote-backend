@@ -217,13 +217,14 @@ router.post('/review', async (req, res) => {
 })
 
 router.post('/generatereview', async (req, res) => {
-  const { name, email, stars, message, title, url } = req.body;
+  const { name, email, stars, message, image, title, url } = req.body;
   const schema = Joi.object({
     name: Joi.string().max(100).required(),
     email: Joi.string().email().max(200).required(),
     stars: Joi.number().min(1).max(5).required(),
     message: Joi.string().required(),
     title: Joi.string().required(),
+    image: Joi.string().optional.allow(" "),
     url: Joi.string().max(300).required(),
   });
 
@@ -234,7 +235,7 @@ router.post('/generatereview', async (req, res) => {
   let product = await Product.findOne({ url: url });
 
   if (product) {
-    let currentDate = product.reviews.length > 0 ? product.reviews[product.reviews.length - 1].date : new Date('2023-11-28').getTime();
+    let currentDate = product.reviews.length > 0 ? product.reviews[product.reviews.length - 1].date : new Date('2023-12-28').getTime();
 
     // Decrement the date for each review post
     const reviewsLength = product.reviews.length + 1;
@@ -248,6 +249,7 @@ router.post('/generatereview', async (req, res) => {
       email: email,
       stars: stars,
       title: title,
+      image: image,
       message: message,
       date: currentDate,
     };

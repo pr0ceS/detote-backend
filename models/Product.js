@@ -19,6 +19,7 @@ const productSchema = new mongoose.Schema(
 				name: { type: String, required: true},
 				email: { type: String, required: true},
 				stars: { type: Number, required: true, min: 0, max: 5},
+				image: { type: String },
 				title: { type: String, required: true},
 				message: { type: String, required: true},
 				date: { type: Date },
