@@ -42,11 +42,11 @@ const scheduleEmail = (email, subject, templateId, personalization, delay) => {
     .setTemplateId(templateId)
     .setPersonalization(personalization);
 
-  const taskKey = `${email}-${subject}`;
+  // const taskKey = `${email}-${subject}`;
 
   // Save the timestamp for recovery in case of a crash
   // saveTaskToDatabase(taskKey, Date.now() + delay * 60 * 1000);
-  saveTaskToDatabase(taskKey, Date.now() + delay);
+  // saveTaskToDatabase(taskKey, Date.now() + delay);
 
 	if(delay === 0) {
 		mailerSend.email.send(emailParams);
@@ -57,7 +57,7 @@ const scheduleEmail = (email, subject, templateId, personalization, delay) => {
 			try {
 				mailerSend.email.send(emailParams);
 				// Remove the task from the database after it's sent
-				ScheduledTask.deleteOne({ taskKey });
+				// ScheduledTask.deleteOne({ taskKey });
 				return true
 			} catch (error) {
 				console.error(error);
@@ -69,7 +69,7 @@ const scheduleEmail = (email, subject, templateId, personalization, delay) => {
 };
 
 const sendPaymentReceive = (email, name, ordernumber) => {
-  const subject = "Your Payment has been Received";
+  const subject = "Uw betaling is ontvangen";
   const templateId = PaymentReceiveMail;
   const personalization = [
     {
@@ -155,10 +155,6 @@ const sendOrderReminder = (email, name) => {
 
 const sendOutMails = (email, name, ordernumber) => {
   sendPaymentReceive(email, name, ordernumber);
-  sendOrderProcessed(email, name);
-  sendOrderPackaged(email, name);
-  sendOrderShipped(email, name);
-  sendOrderReminder(email, name);
 }
 
 module.exports = {
