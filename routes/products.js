@@ -224,7 +224,7 @@ router.post('/generatereview', async (req, res) => {
     stars: Joi.number().min(1).max(5).required(),
     message: Joi.string().required(),
     title: Joi.string().required(),
-    image: Joi.string().optional.allow(" "),
+    image: Joi.string().optional().allow(" "),
     url: Joi.string().max(300).required(),
   });
 
