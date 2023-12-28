@@ -50,7 +50,7 @@ const scheduleEmail = (email, subject, templateId, personalization, delay) => {
 
 	if(delay === 0) {
 		mailerSend.email.send(emailParams);
-		ScheduledTask.deleteOne({ taskKey });
+		// ScheduledTask.deleteOne({ taskKey });
 		return true;
 	} else if (delay > 0) {
 		setTimeout(() => {
