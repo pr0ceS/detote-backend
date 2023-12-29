@@ -1,6 +1,7 @@
 const express = require('express');
 const Joi = require('joi');
 const { Guest } = require('../models/Guest');
+const crypto = require('crypto')
 
 const router = express.Router();
 
